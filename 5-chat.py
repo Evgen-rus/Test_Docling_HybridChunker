@@ -22,7 +22,7 @@ def init_db():
     return db.open_table("docling")
 
 
-def get_context(query: str, table, num_results: int = 5) -> str:
+def get_context(query: str, table, num_results: int = 4) -> str:
     """Search the database for relevant context.
 
     Args:
@@ -37,17 +37,14 @@ def get_context(query: str, table, num_results: int = 5) -> str:
     contexts = []
 
     for _, row in results.iterrows():
-        # Extract metadata
+        # Extract metadata - в новой структуре только filename и title
         filename = row["metadata"]["filename"]
-        page_numbers = row["metadata"]["page_numbers"]
         title = row["metadata"]["title"]
 
         # Build source citation
         source_parts = []
         if filename:
             source_parts.append(filename)
-        if page_numbers:
-            source_parts.append(f"p. {', '.join(str(p) for p in page_numbers)}")
 
         source = f"\nSource: {' - '.join(source_parts)}"
         if title:
@@ -72,6 +69,8 @@ def get_chat_response(messages, context: str) -> str:
     Use only the information from the context to answer questions. If you're unsure or the context
     doesn't contain the relevant information, say so.
     
+    Ты отвечаешь на русском языке, используя информацию из контекста.
+    
     Context:
     {context}
     """
@@ -80,9 +79,9 @@ def get_chat_response(messages, context: str) -> str:
 
     # Create the streaming response
     stream = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         messages=messages_with_context,
-        temperature=0.7,
+        temperature=0.5,
         stream=True,
     )
 
@@ -92,7 +91,8 @@ def get_chat_response(messages, context: str) -> str:
 
 
 # Initialize Streamlit app
-st.title("📚 Document Q&A")
+st.title("📚 Чат с документом о логике продаж")
+st.caption("Задайте вопрос о логике продаж тестового периода")
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
@@ -101,13 +101,38 @@ if "messages" not in st.session_state:
 # Initialize database connection
 table = init_db()
 
+# Отображаем статистику базы знаний
+with st.sidebar:
+    st.header("Информация о базе знаний")
+    st.metric("Количество фрагментов", table.count_rows())
+    
+    # Отображаем примеры возможных вопросов
+    st.subheader("Примеры вопросов:")
+    example_questions = [
+        "Как проводить квалификацию клиентов?",
+        "Что такое тестовый период?",
+        "Как оценивать качество лидов?",
+        "Какие этапы продажи тестового периода?",
+        "Как делать микропрезентацию клиенту?",
+        "Что нужно объяснить клиенту про KPI?"
+    ]
+    
+    for q in example_questions:
+        if st.button(q):
+            st.session_state.example_question = q
+            
 # Display chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # Chat input
-if prompt := st.chat_input("Ask a question about the document"):
+prompt = st.chat_input("Задайте вопрос о документе")
+if not prompt and "example_question" in st.session_state:
+    prompt = st.session_state.example_question
+    del st.session_state.example_question
+
+if prompt:
     # Display user message
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -116,7 +141,7 @@ if prompt := st.chat_input("Ask a question about the document"):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     # Get relevant context
-    with st.status("Searching document...", expanded=False) as status:
+    with st.status("Поиск информации в документе...", expanded=False) as status:
         context = get_context(prompt, table)
         st.markdown(
             """
@@ -145,7 +170,7 @@ if prompt := st.chat_input("Ask a question about the document"):
             unsafe_allow_html=True,
         )
 
-        st.write("Found relevant sections:")
+        st.write("Найденные релевантные фрагменты:")
         for chunk in context.split("\n\n"):
             # Split into text and metadata parts
             parts = chunk.split("\n")
@@ -156,15 +181,15 @@ if prompt := st.chat_input("Ask a question about the document"):
                 if ": " in line
             }
 
-            source = metadata.get("Source", "Unknown source")
-            title = metadata.get("Title", "Untitled section")
+            source = metadata.get("Source", "Неизвестный источник")
+            title = metadata.get("Title", "Без заголовка")
 
             st.markdown(
                 f"""
                 <div class="search-result">
                     <details>
-                        <summary>{source}</summary>
-                        <div class="metadata">Section: {title}</div>
+                        <summary>{title}</summary>
+                        <div class="metadata">Источник: {source}</div>
                         <div style="margin-top: 8px;">{text}</div>
                     </details>
                 </div>

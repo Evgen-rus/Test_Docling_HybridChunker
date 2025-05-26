@@ -7,38 +7,33 @@ from dotenv import load_dotenv
 from lancedb.embeddings import get_registry
 from lancedb.pydantic import LanceModel, Vector
 from openai import OpenAI
-from utils.tokenizer import OpenAITokenizerWrapper
 
 load_dotenv()
 
-# Initialize OpenAI client (make sure you have OPENAI_API_KEY in your environment variables)
+# Initialize OpenAI client
 client = OpenAI()
 
-
-tokenizer = OpenAITokenizerWrapper()  # Load our custom tokenizer for OpenAI
-MAX_TOKENS = 8191  # text-embedding-3-large's maximum context length
-
+print("🚀 Создаем эмбеддинги для документа...")
 
 # --------------------------------------------------------------
 # Extract the data
 # --------------------------------------------------------------
 
 converter = DocumentConverter()
-result = converter.convert("https://arxiv.org/pdf/2408.09869")
-
+result = converter.convert("documents/ЛОГИКА_ПРОДАЖИ_ТЕСТОВОГО_ПЕРИОДА_ЛИДГЕНБЮРО.md")
 
 # --------------------------------------------------------------
-# Apply hybrid chunking
+# Apply hybrid chunking (НОВЫЙ API)
 # --------------------------------------------------------------
 
 chunker = HybridChunker(
-    tokenizer=tokenizer,
-    max_tokens=MAX_TOKENS,
-    merge_peers=True,
+    chunk_size=1024,  # Вместо max_tokens
+    overlap=100       # Перекрытие
 )
 
 chunk_iter = chunker.chunk(dl_doc=result.document)
 chunks = list(chunk_iter)
+print(f"✂️ Создано {len(chunks)} фрагментов для эмбеддинга")
 
 # --------------------------------------------------------------
 # Create a LanceDB database and table
@@ -47,10 +42,8 @@ chunks = list(chunk_iter)
 # Create a LanceDB database
 db = lancedb.connect("data/lancedb")
 
-
 # Get the OpenAI embedding function
-func = get_registry().get("openai").create(name="text-embedding-3-large")
-
+func = get_registry().get("openai").create(name="text-embedding-3-small")
 
 # Define a simplified metadata schema
 class ChunkMetadata(LanceModel):
@@ -59,10 +52,8 @@ class ChunkMetadata(LanceModel):
     This is a requirement of the Pydantic implementation.
     """
 
-    filename: str | None
-    page_numbers: List[int] | None
-    title: str | None
-
+    filename: str
+    title: str
 
 # Define the main Schema
 class Chunks(LanceModel):
@@ -70,45 +61,57 @@ class Chunks(LanceModel):
     vector: Vector(func.ndims()) = func.VectorField()  # type: ignore
     metadata: ChunkMetadata
 
-
 table = db.create_table("docling", schema=Chunks, mode="overwrite")
 
 # --------------------------------------------------------------
 # Prepare the chunks for the table
 # --------------------------------------------------------------
 
-# Create table with processed chunks
-processed_chunks = [
-    {
+# Create table with processed chunks - упрощенная структура метаданных
+processed_chunks = []
+
+for chunk in chunks:
+    # Безопасное извлечение filename
+    filename = "unknown"
+    if hasattr(chunk, 'meta') and chunk.meta:
+        if hasattr(chunk.meta, 'origin') and chunk.meta.origin:
+            if hasattr(chunk.meta.origin, 'filename') and chunk.meta.origin.filename:
+                filename = chunk.meta.origin.filename
+    
+    # Безопасное извлечение title  
+    title = "Untitled"
+    if hasattr(chunk, 'meta') and chunk.meta:
+        if hasattr(chunk.meta, 'headings') and chunk.meta.headings:
+            if len(chunk.meta.headings) > 0:
+                title = chunk.meta.headings[0]
+    
+    processed_chunk = {
         "text": chunk.text,
         "metadata": {
-            "filename": chunk.meta.origin.filename,
-            "page_numbers": [
-                page_no
-                for page_no in sorted(
-                    set(
-                        prov.page_no
-                        for item in chunk.meta.doc_items
-                        for prov in item.prov
-                    )
-                )
-            ]
-            or None,
-            "title": chunk.meta.headings[0] if chunk.meta.headings else None,
+            "filename": filename,
+            "title": title,
         },
     }
-    for chunk in chunks
-]
+    processed_chunks.append(processed_chunk)
+
+print(f"📦 Подготовлено {len(processed_chunks)} фрагментов для индексации")
 
 # --------------------------------------------------------------
 # Add the chunks to the table (automatically embeds the text)
 # --------------------------------------------------------------
 
 table.add(processed_chunks)
+print("💾 Эмбеддинги сохранены в LanceDB!")
+print(f"📊 Всего записей в базе: {table.count_rows()}")
 
 # --------------------------------------------------------------
 # Load the table
 # --------------------------------------------------------------
 
-table.to_pandas()
-table.count_rows()
+print("\n📋 Пример данных из таблицы:")
+sample = table.to_pandas().head(3)
+for idx, row in sample.iterrows():
+    print(f"  • Фрагмент {idx + 1}: {row['text'][:100]}...")
+    print(f"    Метаданные: {row['metadata']}")
+
+print(f"\n✅ Готово! Всего записей: {table.count_rows()}")

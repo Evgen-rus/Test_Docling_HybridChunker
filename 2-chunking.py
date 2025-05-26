@@ -2,37 +2,57 @@ from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
 from dotenv import load_dotenv
 from openai import OpenAI
-from utils.tokenizer import OpenAITokenizerWrapper
 
 load_dotenv()
 
-# Initialize OpenAI client (make sure you have OPENAI_API_KEY in your environment variables)
+# Initialize OpenAI client
 client = OpenAI()
 
-
-tokenizer = OpenAITokenizerWrapper()  # Load our custom tokenizer for OpenAI
-MAX_TOKENS = 8191  # text-embedding-3-large's maximum context length
-
+print("🚀 Начинаю процесс разбиения документа на фрагменты...")
 
 # --------------------------------------------------------------
-# Extract the data
+# Извлечение данных из локального документа
 # --------------------------------------------------------------
 
 converter = DocumentConverter()
-result = converter.convert("https://arxiv.org/pdf/2408.09869")
-
+print("📄 Обрабатываю документ...")
+result = converter.convert("documents/ЛОГИКА_ПРОДАЖИ_ТЕСТОВОГО_ПЕРИОДА_ЛИДГЕНБЮРО.md")
 
 # --------------------------------------------------------------
-# Apply hybrid chunking
+# Применение гибридного разбиения (НОВЫЙ API)
 # --------------------------------------------------------------
 
+print("🔧 Настраиваю HybridChunker...")
+# Новый API HybridChunker
 chunker = HybridChunker(
-    tokenizer=tokenizer,
-    max_tokens=MAX_TOKENS,
-    merge_peers=True,
+    chunk_size=1024,  # Вместо max_tokens
+    overlap=100       # Перекрытие между фрагментами
 )
 
+print("✂️ Разбиваю документ на смысловые фрагменты...")
 chunk_iter = chunker.chunk(dl_doc=result.document)
 chunks = list(chunk_iter)
 
-len(chunks)
+print(f"✅ Разбиение завершено!")
+print(f"📊 Статистика:")
+print(f"   • Всего фрагментов: {len(chunks)}")
+print(f"   • Размер фрагмента: до 1024 токенов")
+
+# --------------------------------------------------------------
+# Анализ созданных фрагментов
+# --------------------------------------------------------------
+
+print("\n" + "="*60)
+print("АНАЛИЗ СОЗДАННЫХ ФРАГМЕНТОВ:")
+print("="*60)
+
+for i, chunk in enumerate(chunks[:3]):  # Показываем первые 3 фрагмента
+    print(f"\n📋 Фрагмент {i+1}:")
+    print(f"   • Размер: {len(chunk.text)} символов")
+    print(f"   • Заголовки: {chunk.meta.headings if chunk.meta.headings else 'Нет'}")
+    print(f"   • Превью: {chunk.text[:200]}...")
+
+if len(chunks) > 3:
+    print(f"\n... и еще {len(chunks) - 3} фрагментов")
+
+print(f"\n💾 Общее количество фрагментов готово для эмбеддинга: {len(chunks)}")

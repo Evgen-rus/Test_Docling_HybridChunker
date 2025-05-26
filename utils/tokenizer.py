@@ -9,7 +9,7 @@ class OpenAITokenizerWrapper(PreTrainedTokenizerBase):
     """Minimal wrapper for OpenAI's tokenizer."""
 
     def __init__(
-        self, model_name: str = "cl100k_base", max_length: int = 8191, **kwargs
+        self, model_name: str = "cl100k_base", max_length: int = 1024, **kwargs
     ):
         """Initialize the tokenizer.
 
@@ -48,3 +48,6 @@ class OpenAITokenizerWrapper(PreTrainedTokenizerBase):
     def from_pretrained(cls, *args, **kwargs):
         """Class method to match HuggingFace's interface."""
         return cls()
+
+    def __len__(self):
+        return self.vocab_size
