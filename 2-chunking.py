@@ -2,6 +2,8 @@ from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
 from dotenv import load_dotenv
 from openai import OpenAI
+import json
+from datetime import datetime
 
 load_dotenv()
 
@@ -25,7 +27,7 @@ result = converter.convert("documents/ЛОГИКА_ПРОДАЖИ_ТЕСТОВО
 print("🔧 Настраиваю HybridChunker...")
 # Новый API HybridChunker
 chunker = HybridChunker(
-    chunk_size=1024,  # Вместо max_tokens
+    chunk_size=8000,  # Вместо max_tokens
     overlap=100       # Перекрытие между фрагментами
 )
 
@@ -56,3 +58,73 @@ if len(chunks) > 3:
     print(f"\n... и еще {len(chunks) - 3} фрагментов")
 
 print(f"\n💾 Общее количество фрагментов готово для эмбеддинга: {len(chunks)}")
+
+# --------------------------------------------------------------
+# Функция сохранения чанков в Markdown
+# --------------------------------------------------------------
+
+def save_chunks_to_markdown(chunks, filename="chunks_output.md"):
+    """
+    Сохраняет все чанки в красивый Markdown файл
+    
+    Args:
+        chunks: список чанков от HybridChunker
+        filename: имя выходного файла
+    """
+    with open(filename, "w", encoding="utf-8") as f:
+        # Заголовок документа
+        f.write("# Анализ фрагментов документа\n\n")
+        f.write(f"**Дата создания:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        f.write(f"**Общее количество фрагментов:** {len(chunks)}\n\n")
+        f.write("---\n\n")
+        
+        # Содержание
+        f.write("## Содержание\n\n")
+        for i, chunk in enumerate(chunks, 1):
+            headings = chunk.meta.headings if chunk.meta.headings else ["Без заголовка"]
+            main_heading = headings[0] if headings else f"Фрагмент {i}"
+            f.write(f"- [Фрагмент {i}: {main_heading}](#фрагмент-{i})\n")
+        f.write("\n---\n\n")
+        
+        # Детальные фрагменты
+        for i, chunk in enumerate(chunks, 1):
+            f.write(f"## Фрагмент {i}\n\n")
+            
+            # Метаданные
+            f.write("### 📊 Метаданные\n\n")
+            f.write(f"- **Размер текста:** {len(chunk.text)} символов\n")
+            
+            # Заголовки
+            if chunk.meta.headings:
+                f.write(f"- **Заголовки:** {' → '.join(chunk.meta.headings)}\n")
+            else:
+                f.write("- **Заголовки:** Отсутствуют\n")
+            
+            # Дополнительные метаданные если есть
+            if hasattr(chunk.meta, 'page') and chunk.meta.page:
+                f.write(f"- **Страница:** {chunk.meta.page}\n")
+            
+            f.write("\n")
+            
+            # Содержимое фрагмента
+            f.write("### 📝 Содержимое\n\n")
+            f.write("```text\n")
+            f.write(chunk.text)
+            f.write("\n```\n\n")
+            
+            # Разделитель между фрагментами
+            if i < len(chunks):
+                f.write("---\n\n")
+    
+    print(f"📁 Все фрагменты сохранены в файл: {filename}")
+
+# --------------------------------------------------------------
+# Сохранение чанков в файл
+# --------------------------------------------------------------
+
+print("\n" + "="*60)
+print("СОХРАНЕНИЕ ФРАГМЕНТОВ:")
+print("="*60)
+
+save_chunks_to_markdown(chunks, "chunks_analysis.md")
+print("✅ Готово! Теперь вы можете открыть файл 'chunks_analysis.md' для просмотра всех фрагментов.")

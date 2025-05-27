@@ -1,3 +1,6 @@
+import os
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
 from docling.document_converter import DocumentConverter
 from utils.sitemap import get_sitemap_urls
 
@@ -8,7 +11,7 @@ converter = DocumentConverter()
 # --------------------------------------------------------------
 
 print("🚀 Начинаю извлечение данных из документа...")
-result = converter.convert("documents/ЛОГИКА_ПРОДАЖИ_ТЕСТОВОГО_ПЕРИОДА_ЛИДГЕНБЮРО.md")
+result = converter.convert("documents/A1209_инструкция.pdf")
 
 document = result.document
 markdown_output = document.export_to_markdown()
