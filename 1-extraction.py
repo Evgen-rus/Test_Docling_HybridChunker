@@ -1,5 +1,6 @@
 import os
 import pathlib
+from docling.document_converter import DocumentConverter
 
 # Настройка локального кэша для HuggingFace моделей
 def setup_local_cache():
@@ -21,8 +22,8 @@ def setup_local_cache():
 # Инициализация локального кэша перед импортом библиотек
 cache_path = setup_local_cache()
 
-from docling.document_converter import DocumentConverter
-from utils.sitemap import get_sitemap_urls
+
+#from utils.sitemap import get_sitemap_urls
 
 print("🤖 Инициализация DocumentConverter...")
 try:
@@ -38,18 +39,51 @@ except Exception as e:
 # --------------------------------------------------------------
 
 print("🚀 Начинаю извлечение данных из документа...")
-result = converter.convert("documents/Инструкция_по_дефектоскопии_валов.pdf")
 
-document = result.document
-markdown_output = document.export_to_markdown()
-json_output = document.export_to_dict()
+# Проверка существования файла
+pdf_path = "documents/test_simple.pdf"
 
-print("✅ Документ успешно обработан!")
-print("📄 Размер документа:", len(markdown_output), "символов")
-print("\n" + "="*50)
-print("ПРЕВЬЮ ИЗВЛЕЧЕННОГО ТЕКСТА:")
-print("="*50)
-print(markdown_output[:1000] + "...")
+if not os.path.exists(pdf_path):
+    print(f"❌ ОШИБКА: Файл не найден: {pdf_path}")
+    print("📁 Проверьте, что файл существует в папке documents/")
+    exit(1)
+
+print(f"📄 Файл найден: {pdf_path}")
+file_size = os.path.getsize(pdf_path) / (1024 * 1024)  # размер в MB
+print(f"📊 Размер файла: {file_size:.2f} MB")
+
+try:
+    print("🔄 Начинаю конвертацию PDF...")
+    result = converter.convert(pdf_path)
+    print("✅ Конвертация PDF завершена успешно!")
+    
+    print("🔄 Извлекаю содержимое документа...")
+    document = result.document
+    
+    if document is None:
+        print("❌ ОШИБКА: Документ не был обработан (document = None)")
+        exit(1)
+    
+    print("🔄 Экспортирую в markdown...")
+    markdown_output = document.export_to_markdown()
+    
+    print("🔄 Экспортирую в JSON...")
+    json_output = document.export_to_dict()
+    
+    print("✅ Документ успешно обработан!")
+    print("📄 Размер документа:", len(markdown_output), "символов")
+    print("\n" + "="*50)
+    print("ПРЕВЬЮ ИЗВЛЕЧЕННОГО ТЕКСТА:")
+    print("="*50)
+    print(markdown_output[:1000] + "...")
+    
+except Exception as e:
+    print(f"❌ ОШИБКА при обработке документа: {e}")
+    print(f"🔧 Тип ошибки: {type(e).__name__}")
+    import traceback
+    print("📋 Детали ошибки:")
+    traceback.print_exc()
+    exit(1)
 
 # --------------------------------------------------------------
 # Сохранение результатов для проверки
