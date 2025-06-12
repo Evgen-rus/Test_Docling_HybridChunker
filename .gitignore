@@ -71,6 +71,4 @@ data/*
 *.db
 *.db-journal
 
-# Docs folder
-docs/
-documents/
+
